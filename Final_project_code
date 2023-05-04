@@ -1,0 +1,130 @@
+# installing R packages
+install.packages("BiocManager")
+install.packages("forcats")
+install.packages("stringr")
+install.packages("ggplot2")
+install.packages("ggrepel")
+install.packages("readr")
+install.packages("tidyr")
+install.packages("survminer")
+BiocManager::install("GEOquery")
+BiocManager::install("limma")
+BiocManager::install("pheatmap")
+BiocManager::install("org.Hs.eg.db")
+
+#import the data
+library(GEOquery)
+US_population_id <- "GSE171957"
+Europe_population_id <- "GSE180186"
+gse1 <- getGEO(US_population_id)
+gse2 <- getGEO(Europe_population_id)
+
+## check how many platforms used
+length(gse1)
+length(gse2)
+gse1 <- gse1[[1]]
+gse1
+gse2 <- gse2[[1]]
+gse2
+pData(gse1) ## print the sample information
+fData(gse1) ## print the gene annotation
+exprs(gse1) ## print the expression data
+pData(gse2) ## print the sample information
+fData(gse2) ## print the gene annotation
+exprs(gse2) ## print the expression data
+
+## exprs get the expression levels as a data frame and get the distribution
+summary(exprs(gse1))
+summary(exprs(gse2))
+
+# inspect the clinical variable
+library(dplyr)
+sampleInfo1 <- pData(gse1)
+sampleInfo1
+sampleInfo2 <- pData(gse2)
+sampleInfo2
+
+#sample clustering and principle component analysis
+## source_name_ch1 and characteristics_ch1.1 seem to contain factors we might need for the analysis. Let's pick just those columns
+
+sampleInfo1 <- select(sampleInfo1, source_name_ch1,characteristics_ch1.1)
+
+## Optionally, rename to more convenient column names
+sampleInfo1 <- rename(sampleInfo1,group = source_name_ch1, patient=characteristics_ch1.1)
+
+#same process for dataset2 (europe population)
+## source_name_ch1 and characteristics_ch1.1 seem to contain factors we might need for the analysis. Let's pick just those columns
+
+sampleInf2o <- select(sampleInfo2, source_name_ch1,characteristics_ch1.1)
+
+## Optionally, rename to more convenient column names
+sampleInfo2 <- rename(sampleInfo2,group = source_name_ch1, patient=characteristics_ch1.1)
+
+sampleInfo1
+sampleInfo2
+## Print the rownames of the sample information and check it matches the correlation matrix
+rownames(sampleInfo1)
+rownames(sampleInfo2)
+library(ggplot2)
+library(ggrepel)
+library(readr)
+full_output1 <- cbind(fData(gse1),exprs(gse1))
+write_csv(full_output, path="gse_full_output1.csv")
+full_output2 <- cbind(fData(gse2),exprs(gse2))
+write_csv(full_output, path="gse_full_output2.csv")
+
+features1 <- fData(gse1)
+View(features1)
+### Look at the features data frame and decide the names of the columns you want to keep
+features1 <- select(features1,Symbol,Entrez_Gene_ID,Chromosome,Cytoband)
+full_output1 <- cbind(features1,exprs(gse1))
+write_csv(full_output1, path="gse_full_output1.csv")
+
+features2 <- fData(gse2)
+View(features2)
+### Look at the features data frame and decide the names of the columns you want to keep
+features2 <- select(features2,Symbol,Entrez_Gene_ID,Chromosome,Cytoband)
+full_output2 <- cbind(features2,exprs(gse2))
+write_csv(full_output2, path="gse_full_output2.csv")
+
+
+#Differential expression
+library(limma)
+design1 <- model.matrix(~0+sampleInfo1$group)
+design1
+design2 <- model.matrix(~0+sampleInfo2$group)
+design2
+## the column names are a bit ugly, so we will rename
+colnames(design1) <- c("Ductal","lobular")
+colnames(design2) <- c("Ductal","lobular")
+summary(exprs(gse1))
+summary(exprs(gse2))
+
+## calculate median expression level
+cutoff1 <- median(exprs(gse1))
+cutoff2 <- median(exprs(gse2))
+## TRUE or FALSE for whether each gene is "expressed" in each sample
+is_expressed1 <- exprs(gse1) > cutoff1
+is_expressed2 <- exprs(gse2) > cutoff2
+
+## Identify genes expressed in more than 2 samples
+
+keep1 <- rowSums(is_expressed1) > 2
+keep2 <- rowSums(is_expressed2) > 2
+## check how many genes are removed / retained.
+table(keep1)
+table(keep2)
+## subset to just those expressed genes
+gse1 <- gse1[keep1,]
+gse2 <- gse2[keep2,]
+fit1 <- lmFit(exprs(gse1), design1)
+head(fit1$coefficients)
+fit2 <- lmFit(exprs(gse2), design2)
+head(fit2$coefficients)
+#visualization
+anno1 <- fData(gse1)
+anno1
+anno2 <- fData(gse2)
+anno2
+ggplot(full_results1,aes(x = logFC, y=B)) + geom_point())
+ggplot(full_results2,aes(x = logFC, y=B)) + geom_point())
